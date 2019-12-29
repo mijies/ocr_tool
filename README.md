@@ -1,4 +1,9 @@
-# ocr_tool
+# OCR Tool
+
+    Download sequential image files (or use ones on local)
+    OCR the images into text
+    Make a report (Currently MS Excel based)
+
 
 ## Requirement
 
