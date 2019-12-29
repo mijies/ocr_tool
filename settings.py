@@ -3,8 +3,12 @@
 BASE_URL = 'http://www.kokuseikyo.or.jp/syuushi/img/29/'
 IMG_EXTENSION = 'png'
 
-def IMG_ITER(n): # generator to return image file names
-    while True:
+START_IMG_INDEX = 1
+FINAL_IMG_INDEX = 3 # comment out for all the images after START_IMG_INDEX
+
+def IMG_ITER(n, end=None): # generator to return image file names
+    stop_func = (lambda x: True) if end is None else (lambda x: x <= end)
+    while stop_func(n):
         yield '{:0>2}.{}'.format(n, IMG_EXTENSION)
         n += 1
 

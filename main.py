@@ -2,15 +2,23 @@ from settings import *
 from syuushi import Syuushi
 
 
-syu = Syuushi(DATA_DIR)
+syu = Syuushi()
+# syu = Syuushi(DATA_DIR) # Specify directory if images are on local
 
-syu.wget_src_imgs(BASE_URL, IMG_ITER(23))
-print('\n Images fetched\n')
+print('\n Fetching images...\n')
+try:
+    syu.wget_src_imgs(BASE_URL, IMG_ITER(START_IMG_INDEX, end=FINAL_IMG_INDEX))
+except NameError:
+    syu.wget_src_imgs(BASE_URL, IMG_ITER(START_IMG_INDEX))
+    
 syu.print_img_list()
+print('\n ...Done\n')
 
+print('\n Performing OCR...')
 syu.ocr_src_imgs()
-print('\n OCR completed')
+print(' ...Done\n')
 
-syu.report_in_excel()
-print('\n Report created')
+print('\n Creating report...')
+syu.create_report()
+print(' ...Done\n')
 

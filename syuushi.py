@@ -65,39 +65,40 @@ class Syuushi:
             self.ocr_file_list.append(txt)
     
 
-    def report_in_excel(self):
+    def create_report(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         report = '%s_%s.%s' % (REPORT_FILE_PREFIX, timestamp, REPORT_FILE_EXTENSION)
         path = os.path.join(self.data_dir, report)
         ex = new_excel_handle(path)
 
-        # pattern_head = r'\n[0-9]'
         pattern_head = r'[^\n ]'
         pattern_tail = r'\n\n \n'
         for img, txt in zip(self.src_img_list, self.ocr_file_list):
 
+            print(img)
             available = [name for name in ex.get_sheetnames() if name not in self.src_img_list]
             if len(available) == 0: # add new sheet if all sheets are already used
                 ex.add_sheet(img)
             else: # rename and use available one
                 ex.set_sheet_name(available[0], img)
 
-            pos = 0 # initial search position in txt
-            col = 2 # initial column to write in
-            while pos != -1:
-                cut_out, pos = cut_out_txt(txt[pos:], pattern_head, pattern_tail)
+            next_pos = 0 # initial search position in txt
+            col_idx  = 2 # initial column to write in
+            txt += ' '   # for slicing by -1
+            while next_pos < len(txt):
+                pos, end = cut_out_txt(txt[next_pos:], pattern_head, pattern_tail)
 
                 data = []
-                for line in io.StringIO(cut_out):
+                for line in io.StringIO(txt[next_pos + pos:next_pos + end]):
                     idx = line.find(' ')
-                    if line[:idx].replace('.', '').replace(',', '').isnumeric():
+                    if line[:idx].replace('.', '').replace(',', '').isdecimal():
                         data.append([line[:idx], line[idx+1:]])
                     else:
                         data.append([line])
 
-                ex.set_range_values(img, 2, col, data)
-                col += REPORT_COLUMN_SPAN + 2
-
+                ex.set_range_values(img, 2, col_idx, data)
+                col_idx += REPORT_COLUMN_SPAN + 2
+                next_pos += end
 
 
 def cut_out_txt(txt, pattern_head, pattern_tail):
@@ -109,5 +110,5 @@ def cut_out_txt(txt, pattern_head, pattern_tail):
 
     match = re.search(pattern_tail, txt[idx:])
     if not match:
-        return txt[idx:], -1
-    return txt[idx:idx + match.start()], idx + match.end()
+        return idx, len(txt)
+    return idx, idx + match.end()
