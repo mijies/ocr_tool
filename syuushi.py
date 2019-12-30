@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import glob
 import io
@@ -14,7 +15,7 @@ from excel import ExcelHandle, new_excel_handle
 tool = pyocr.get_available_tools()[0]
 
 class Syuushi:
-    def __init__(self, data_dir=None):
+    def __init__(self, data_dir=None, is_async=False):
         self.src_img_list = []
         self.ocr_file_list = []
         if data_dir is None: # make new data directory
@@ -24,6 +25,7 @@ class Syuushi:
             self.data_dir = data_dir
             img_list = glob.glob(os.path.join(data_dir, '*.' + IMG_EXTENSION))
             self.src_img_list = [os.path.split(path)[-1] for path in img_list]
+        self.is_async = is_async
 
 
     def print_img_list(self):
@@ -67,15 +69,13 @@ class Syuushi:
 
     def create_report(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        report = '%s_%s.%s' % (REPORT_FILE_PREFIX, timestamp, REPORT_FILE_EXTENSION)
+        report = '%s%s.%s' % (REPORT_FILE_PREFIX, timestamp, REPORT_FILE_EXTENSION)
         path = os.path.join(self.data_dir, report)
         ex = new_excel_handle(path)
 
         pattern_head = r'[^\n ]'
         pattern_tail = r'\n\n \n'
         for img, txt in zip(self.src_img_list, self.ocr_file_list):
-
-            print(img)
             available = [name for name in ex.get_sheetnames() if name not in self.src_img_list]
             if len(available) == 0: # add new sheet if all sheets are already used
                 ex.add_sheet(img)
@@ -91,7 +91,8 @@ class Syuushi:
                 data = []
                 for line in io.StringIO(txt[next_pos + pos:next_pos + end]):
                     idx = line.find(' ')
-                    if line[:idx].replace('.', '').replace(',', '').isdecimal():
+                    if line[:idx].replace('.', '').replace(',', '').isdecimal() \
+                        and len(line[:idx]) > 1:
                         data.append([line[:idx], line[idx+1:]])
                     else:
                         data.append([line])

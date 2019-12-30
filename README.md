@@ -2,7 +2,7 @@
 
     Download sequential image files (or use ones on local)
     OCR the images into text
-    Make a report (Currently MS Excel based)
+    Make a report (currently MS Excel based)
 
 
 ## Requirement
