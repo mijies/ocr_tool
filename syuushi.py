@@ -1,5 +1,5 @@
 import asyncio
-import concurrent.futures
+import concurrent.futures as parallel
 import datetime
 import glob
 import io
@@ -16,9 +16,10 @@ from excel import ExcelHandle, new_excel_handle
 tool = pyocr.get_available_tools()[0]
 
 class Syuushi:
-    def __init__(self, data_dir=None, is_async=False, is_parallel=False):
+    def __init__(self, data_dir=None, is_async=False, ocr_parallel=False):
         self.src_img_list = []
         self.ocr_txt_list = []
+
         if data_dir is None: # make new data directory
             self.data_dir = 'data_%s' % get_timestamp()
             os.makedirs(self.data_dir)
@@ -26,12 +27,14 @@ class Syuushi:
             self.data_dir = data_dir
             img_list = glob.glob(os.path.join(data_dir, '*.' + IMG_EXTENSION))
             self.src_img_list = [os.path.split(path)[-1] for path in img_list]
+
         self.is_async = is_async
-        self.is_parallel = is_parallel
+        self.ocr_parallel = ocr_parallel
+        
         if is_async:
-            print('\n Initialized in asynchronous IO mode')
-        if is_parallel:
-            print('\n Initialized in multi-processor mode')
+            print('\n Image downloading in asynchronous IO mode')
+        if ocr_parallel:
+            print('\n Image OCR in multi-processor mode')
 
 
     def print_img_list(self):
@@ -49,66 +52,64 @@ class Syuushi:
 
         if self.is_async:
             loop = asyncio.get_event_loop() 
-            future = async_run(img_iter, self.wget_img, base_url)
+            future = async_run(img_iter, wget_img, base_url, self.data_dir)
             self.src_img_list = loop.run_until_complete(future)
         else:
-            self.src_img_list = [self.wget_img(img, base_url) for img in img_iter]
-
-
-    def wget_img(self, img, base_url):
-        res = requests.get(base_url + img)
-        if res.status_code != 200:
-            return
-        if 'image' not in res.headers['content-type']:
-            print("Content-Type must be image\n URL: %s\n Content-Type: %s" % (img, content_type))
-            exit(1)
-
-        path = os.path.join(self.data_dir, img)
-        with open(path, 'wb') as f:
-            f.write(res.content)
-        
-        print(' ', img, 'fetched')
-        return img
+            self.src_img_list = [wget_img(img, base_url, self.data_dir) for img in img_iter]
 
 
     def ocr_src_imgs(self):
         timestamp = get_timestamp()
-
-        if self.is_parallel:
-            with concurrent.futures.ProcessPoolExecutor(max_workers=PROC_PARALLEL_LIMIT) as excuter:
-                self.ocr_txt_list = loop.run_until_complete(future)
+        if self.ocr_parallel:
+            with parallel.ProcessPoolExecutor(max_workers=PROC_PARALLEL_LIMIT) as executor:
+                futures = [executor.submit(ocr_imgs, img, self.data_dir, timestamp) for img in self.src_img_list]
+                self.ocr_txt_list = [future.result() for future in parallel.as_completed(futures)]
         else:
-            self.ocr_txt_list = [self.ocr_imgs(img, timestamp) for img in self.src_img_list]
-
-
-    def ocr_imgs(self, img, timestamp):
-        path = os.path.join(self.data_dir, img)
-        txt = tool.image_to_string(
-            Image.open(path),
-            lang=OCR_LANG,
-            builder=pyocr.builders.TextBuilder()
-        )
-        path = '%s_%s.%s' % (path, timestamp, OCR_FILE_EXTENSION)
-        with open(path, 'w') as f:
-            f.write(txt)
-
-        print(' ', img, 'OCRed')
-        return '%s_%s.%s' % (img, timestamp, OCR_FILE_EXTENSION)
+            self.ocr_txt_list = [ocr_imgs(img, self.data_dir, timestamp) for img in self.src_img_list]
     
 
     def create_report(self):
         txt_list = open_read_file_list(self.data_dir, self.ocr_txt_list)
-        timestamp = get_timestamp()
-        report = '%s%s.%s' % (REPORT_FILE_PREFIX, timestamp, REPORT_FILE_EXTENSION)
+        report = '%s%s.%s' % (REPORT_FILE_PREFIX, get_timestamp(), REPORT_FILE_EXTENSION)
         path = os.path.join(self.data_dir, report)
         ex = new_excel_handle(path)
-
         report_in_excel(ex, self.src_img_list, txt_list)
 
 
 def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
+
+def wget_img(img, base_url, data_dir):
+    res = requests.get(base_url + img)
+    if res.status_code != 200:
+        return
+    if 'image' not in res.headers['content-type']:
+        print("Content-Type must be image\n URL: %s\n Content-Type: %s" % (img, content_type))
+        exit(1)
+
+    path = os.path.join(data_dir, img)
+    with open(path, 'wb') as f:
+        f.write(res.content)
+    
+    print(' ', img, 'fetched')
+    return img
+
+
+def ocr_imgs(img, data_dir, timestamp):
+    path = os.path.join(data_dir, img)
+    txt = tool.image_to_string(
+        Image.open(path),
+        lang=OCR_LANG,
+        builder=pyocr.builders.TextBuilder()
+    )
+    path = '%s_%s.%s' % (path, timestamp, OCR_FILE_EXTENSION)
+    with open(path, 'w') as f:
+        f.write(txt)
+
+    print(' ', img, 'OCRed')
+    return '%s_%s.%s' % (img, timestamp, OCR_FILE_EXTENSION)
+    
 
 def open_read_file_list(base_path, name_list):
     txt_list = []
@@ -166,7 +167,7 @@ def cut_out_txt(txt, pattern_head, pattern_tail):
 async def async_run(iters, cb, *args):
     semaphore = asyncio.Semaphore(ASYNC_PARALLEL_LIMIT)
     async def async_semaphore(cd, *args):
-        with await semaphore:
+        async with semaphore:
             return await async_executor(cb, *args)
 
     return await asyncio.gather(
@@ -177,3 +178,4 @@ async def async_run(iters, cb, *args):
 async def async_executor(cb, *args):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, cb, *args)
+
