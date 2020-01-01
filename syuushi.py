@@ -16,7 +16,7 @@ from excel import ExcelHandle, new_excel_handle
 tool = pyocr.get_available_tools()[0]
 
 class Syuushi:
-    def __init__(self, data_dir=None, is_async=False, ocr_parallel=False):
+    def __init__(self, data_dir=None, wget_async=False, ocr_parallel=False):
         self.src_img_list = []
         self.ocr_txt_list = []
 
@@ -28,13 +28,12 @@ class Syuushi:
             img_list = glob.glob(os.path.join(data_dir, '*.' + IMG_EXTENSION))
             self.src_img_list = [os.path.split(path)[-1] for path in img_list]
 
-        self.is_async = is_async
+        self.wget_async = wget_async
         self.ocr_parallel = ocr_parallel
-        
-        if is_async:
+        if wget_async:
             print('\n Image downloading in asynchronous IO mode')
         if ocr_parallel:
-            print('\n Image OCR in multi-processor mode')
+            print('\n Image OCR in multi-processor mode\n')
 
 
     def print_img_list(self):
@@ -50,7 +49,7 @@ class Syuushi:
             self.print_img_list()
             return
 
-        if self.is_async:
+        if self.wget_async:
             loop = asyncio.get_event_loop() 
             future = async_run(img_iter, wget_img, base_url, self.data_dir)
             self.src_img_list = loop.run_until_complete(future)

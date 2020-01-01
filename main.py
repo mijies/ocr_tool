@@ -20,11 +20,11 @@ if __name__ == '__main__':
     syu.print_ocr_list()
     print('\n Time: ', time.time() - start_time)
 
-    # start_time = time.time()
-    # print('\n Creating report...\n')
-    # syu.create_report()
-    # print('\n ...Done\n')
-    # print('\n Time: ', time.time() - start_time)
+    start_time = time.time()
+    print('\n Creating report...\n')
+    syu.create_report()
+    print('\n ...Done\n')
+    print('\n Time: ', time.time() - start_time)
 
 
 
