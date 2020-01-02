@@ -12,28 +12,21 @@ import requests
 
 from settings import *
 from excel import ExcelHandle, new_excel_handle
-
 tool = pyocr.get_available_tools()[0]
 
 class Syuushi:
-    def __init__(self, data_dir=None, wget_async=False, ocr_parallel=False):
+    def __init__(self, data_dir, wget_async=False, ocr_parallel=False):
         self.src_img_list = []
         self.ocr_txt_list = []
-
-        if data_dir is None: # make new data directory
-            self.data_dir = 'data_%s' % get_timestamp()
-            os.makedirs(self.data_dir)
-        else: # use pre-made data directory and source images
-            self.data_dir = data_dir
-            img_list = glob.glob(os.path.join(data_dir, '*.' + IMG_EXTENSION))
-            self.src_img_list = [os.path.split(path)[-1] for path in img_list]
-
         self.wget_async = wget_async
         self.ocr_parallel = ocr_parallel
-        if wget_async:
-            print('\n Image downloading in asynchronous IO mode')
-        if ocr_parallel:
-            print('\n Image OCR in multi-processor mode\n')
+
+        self.data_dir = data_dir
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+        else: # use pre-made data directory and source images
+            img_list = glob.glob(os.path.join(data_dir, '*.' + IMG_EXTENSION))
+            self.src_img_list = [os.path.split(path)[-1] for path in img_list]
 
 
     def print_img_list(self):
@@ -97,11 +90,15 @@ def wget_img(img, base_url, data_dir):
 
 def ocr_imgs(img, data_dir, timestamp):
     path = os.path.join(data_dir, img)
-    txt = tool.image_to_string(
-        Image.open(path),
-        lang=OCR_LANG,
-        builder=pyocr.builders.TextBuilder()
-    )
+
+    txt = ''
+    for im in pre_process(Image.open(path), path):
+        txt += tool.image_to_string(
+            im,
+            lang=OCR_LANG,
+            builder=pyocr.builders.TextBuilder()
+        ) + '\n\n \n'
+
     path = '%s_%s.%s' % (path, timestamp, OCR_FILE_EXTENSION)
     with open(path, 'w') as f:
         f.write(txt)
@@ -109,6 +106,24 @@ def ocr_imgs(img, data_dir, timestamp):
     print(' ', img, 'OCRed')
     return '%s_%s.%s' % (img, timestamp, OCR_FILE_EXTENSION)
     
+
+def pre_process(im, path):
+    if DPI_CONVERT:
+        x, y = DPI_TUPLE
+        path = '{}_dpi{}-{}.png'.format(path, x, y)
+        im.save(path, dpi=(x, y))
+        im = Image.open(path)
+    
+    if SPLIT_VERTICAL:
+        w, h = im.size
+        # im.crop((w // 2 + 5, 10, w, h -10)).save(path + '.png', quality=95)
+        return [
+            im.crop((0, 10, w // 2, h -10)),    # vertically split image
+            im.crop((w // 2 + 5, 10, w, h -10))
+        ]
+    
+    return [im]
+
 
 def open_read_file_list(base_path, name_list):
     txt_list = []
@@ -153,8 +168,7 @@ def report_in_excel(ex, sheetnames, txt_list):
 def cut_out_txt(txt, pattern_head, pattern_tail):
     match = re.search(pattern_head, txt)
     if not match:
-        print('Pattern for head not found')
-        exit(1)
+        return len(txt) - 1, len(txt)
     idx = match.start()
 
     match = re.search(pattern_tail, txt[idx:])

@@ -15,11 +15,19 @@ def IMG_ITER(idx, end=None): # generator to return image file names
 
 # Define data directory constants
 DATA_DIR = 'data_'
+import datetime
+DATA_DIR = 'data_%s' % datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 # Define ocr constants
 OCR_LANG = 'jpn'
 OCR_FILE_EXTENSION = 'txt'
+
+
+# Define constants for preprocess before ORC
+DPI_CONVERT = True      # adjust image dpi
+DPI_TUPLE = (300, 300)  # required when DPI_CONVERT is True, dpi value (int, int)
+SPLIT_VERTICAL = True   # split image vertically
 
 
 # Define report constants
@@ -56,14 +64,23 @@ try:
     IMG_ITER_KWARGS['end'] = FINAL_IMG_INDEX
 except: pass
 
+if DPI_CONVERT:
+    try:
+        if type(DPI_TUPLE) is not type(()):
+            exit(1)
+    except:
+        print('\n DPI_TUPLE must be set as tuple class when DPI_CONVERT is True')
+        exit(1)
 
 # Argument to pass Shyuushi Initializer
 SYUUSHI_KWARGS = {}
-try:
-    SYUUSHI_KWARGS['data_dir'] = DATA_DIR
-except: pass
+SYUUSHI_KWARGS['data_dir'] = DATA_DIR
 SYUUSHI_KWARGS['wget_async'] = WGET_ASYNC
 SYUUSHI_KWARGS['ocr_parallel'] = OCR_PARALLEL
 
+if WGET_ASYNC:
+    print('\n Image downloading in asynchronous IO mode')
+if OCR_PARALLEL:
+    print(' Image OCR in multi-processor mode\n')
 
 
